@@ -1,0 +1,22 @@
+sim_kids = true
+sim_s = 0.01
+sim_h = 0.5
+kids_per_couple = 10
+downsample = 50000
+
+seq_compression = gzip
+
+mothers_file = ../mothers.vcf.gz
+fathers_file = ../fathers.vcf.gz
+
+female_rmap_path = ../frmap_exome.bedgraph
+male_rmap_path = ../mrmap_exome.bedgraph
+
+s_interval = (1.0, 6.0)
+h_interval = (0.5, 0.5)
+
+num_threads = 
+num_pilot = 1000000
+num_sims = 10000000
+num_meiosis = 100
+num_accepted = 1000

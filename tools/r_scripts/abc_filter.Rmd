@@ -1,0 +1,250 @@
+---
+title: "TIDES"
+subtitle: "Trio-based Inference of DominancE and Selection"
+author: "Gustavo V. Barroso"
+date: "December 1st 2020"
+output:
+  html_document: 
+    theme: journal
+    highlight: espresso
+    toc: false
+    number_sections: false
+    toc_depth: 2
+params:
+  tol: 
+    value: 1e-3
+  h: 
+    value: !r NULL
+  s: 
+    value: !r NULL
+
+---
+
+# Usage
+
+Prior to running this script, you should have run TIDES under four different models:
+
+  - 'additive'
+  - 'full'
+  - 'neutral'
+  - 'recessive'
+
+See https://github.com/gvbarroso/TIDES/tree/test/doc for details.
+
+Run this script from the command line:
+
+    Rscript -e "rmarkdown::render('abc_filter.Rmd', params=list(tol = x, h = y, s = z))"
+
+where
+
+      'x' is the tolerance for the ABC rejection algorithm,  
+      'y' is the true (simulated) value of h and [if available, otherwise specify NULL]
+      'z' is the true (simulated) value of s [if available, otherwise specify NULL].
+
+```{r setup, message=FALSE, warning=FALSE, include=FALSE}
+
+knitr::opts_chunk$set(echo=T)
+
+library(reshape2)
+library(cowplot)
+library(tidyverse)
+library(abc)
+library(rethinking)
+library(scales)
+library(knitr)
+```
+
+# Loading simulated parameters and summary statistics
+
+We load simulation results from four different models fit to the same data:
+We will use these simulations to perform model selection and parameter inference later on.
+
+```{r, message=FALSE, warning=FALSE}
+
+# observed summary statistics are the same for all models, we arbitrarily pick one:
+obs_sum_stats <- read.table("full_model/obs_sum_stats.txt", header = T)
+
+# summary statistics under each model
+sim_sum_stats_additive <- read.table(gzfile("additive_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_recessive <- read.table(gzfile("recessive_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_neutral <- read.table(gzfile("neutral_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_full <- read.table(gzfile("full_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_models <- rbind.data.frame(sim_sum_stats_additive, 
+                                         sim_sum_stats_recessive, 
+                                         sim_sum_stats_neutral,
+                                         sim_sum_stats_full)
+
+# parameter draws under each model
+sim_params_additive <- read.table(gzfile("additive_model/sim_params_dist.gz"), header = T)
+sim_params_recessive <- read.table(gzfile("recessive_model/sim_params_dist.gz"), header = T)
+sim_params_neutral <- read.table(gzfile("neutral_model/sim_params_dist.gz"), header = T)
+sim_params_full <- read.table(gzfile("full_model/sim_params_dist.gz"), header = T)
+sim_params_models <- rbind.data.frame(sim_params_additive, 
+                                      sim_params_recessive, 
+                                      sim_params_neutral,
+                                      sim_params_full)
+
+# model indicators
+nsims <- nrow(sim_sum_stats_full)
+models <- c(rep("additive", nsims),
+            rep("recessive", nsims),
+            rep("neutral", nsims),
+            rep("full", nsims))
+```
+
+# Visualization of Summary Statistics 
+
+We plot the distribution of simulated summary statistics per model (colored clouds).  
+The red start denotes the observed summary statistic.
+
+```{r, message=FALSE, warning=FALSE}
+
+# 2D
+sum_stats_2d <- cbind.data.frame(sim_sum_stats_models[models != "full",], models[models != "full"])
+sum_stats_2d_ds <- sample_n(sum_stats_2d, 6e+4) # downsample otherwise plot is too big
+names(sum_stats_2d_ds)[3] <- "models"
+
+ss2d <- ggplot(data = sum_stats_2d_ds, aes(x = diff_het, y = diff_homo, color = models))
+ss2d <- ss2d + geom_point(shape = 16, size = 2,  alpha = 0.15) + theme_bw()
+ss2d <- ss2d + labs(title = NULL, x = "diff_het", y = "diff_homo")
+ss2d <- ss2d + scale_color_manual(values = c("#7fc97f", "#beaed4", "#fdc086"))
+ss2d <- ss2d + guides(colour = guide_legend(override.aes = list(alpha = 1))) 
+ss2d <- ss2d + theme(axis.text.x = element_text(size = 14),
+                     axis.text.y = element_text(size = 14),
+                     axis.title.x = element_text(size = 20),
+                     axis.title.y = element_text(size = 20))
+ss2d <- ss2d + geom_point(x = obs_sum_stats$diff_het, y = obs_sum_stats$diff_homo, col = 'red', shape = 8, size = 6)
+ss2d
+```
+
+# Model selection
+
+We now select across different evolutionary scenarios (models).
+Since the "full" model overlaps with the others, we only select among "additive", "neutral" and "recessive".
+
+```{r, include=FALSE}
+
+fixed_models <- models[models != "full"] # excludes full model
+sim_sum_stats_fixed_models <- sim_sum_stats_models[models %in% fixed_models,]
+
+mod_sel <- invisible(postpr(target = obs_sum_stats, index = fixed_models, sumstat = sim_sum_stats_fixed_models, method = "neuralnet", tol = params$tol))
+summary(mod_sel)
+
+write.table(mod_sel$pred, "models_post_probs.txt", col.names = F, row.names = F, quote = F, sep = "\t") # for plotting later on
+```
+
+```{r, echo=FALSE, results='asis'}
+mpp <- read.table("models_post_probs.txt", sep = "\t", header = F)
+names(mpp) <- c("Model", "Posterior Probability")
+kable(mpp)
+
+if(params$s == 0) {
+  cat("True (simulated) model: NEUTRAL")
+} else if(params$h == 0) {
+  cat("True (simulated) model: RECESSIVE")
+} else if(params$h == 0.5) {
+  cat("True (simulated) model: ADDITIVE")
+}
+```
+
+# Parameter Inference
+
+Here we infer and plot posterior distributions for s and h.
+
+```{r, message=FALSE, warning=FALSE}
+
+model <- "full" # in most cases we are interested in the full model (with least assumption)
+
+res_reject <- abc(target = obs_sum_stats,
+                  param = sim_params_models[models == model,],
+                  sumstat = sim_sum_stats_models[models == model,],
+                  tol = params$tol,
+                  method = "rejection")
+
+res_neuralnet <- invisible(abc(target = obs_sum_stats,
+                     param = sim_params_models[models == model,],
+                     sumstat = sim_sum_stats_models[models == model,],
+                     kernel = "epanechnikov", 
+                     tol = params$tol, method = "neuralnet",
+                     numnet = 6, transf = "log"))
+
+samp_size <- nrow(sim_params_models[models == model,]) * params$tol
+prior_h <- runif(samp_size, 0, 0.6) # same as h_interval in TIDES's options file
+prior_s <- 10^(-runif(samp_size, 1, 6)) # same as s_interval in TIDES's options file
+
+# merges all parameter values (priors and posteriors) into one table:
+dat <- cbind.data.frame(res_neuralnet$adj.values, res_reject$unadj.values, prior_h, prior_s)
+names(dat) <- c("neuralnet_h", "neuralnet_s", "rejection_h", "rejection_s", "prior_h", "prior_s")
+
+# writes posterior distributions to files
+write.table(dat$neuralnet_h, "posterior_dist_h.txt", quote = F, col.names = F, row.names = F, sep = "\n")
+write.table(dat$neuralnet_s, "posterior_dist_s.txt", quote = F, col.names = F, row.names = F, sep = "\n")
+
+# plot for h and h s posterior density, adding a line with the simulated values of s and h
+
+# s density
+dat_s <- dplyr::select(dat, ends_with("_s")) 
+dat_s$sim <- 1:nrow(dat_s)
+molten_vals <- melt(dat_s, id.vars = "sim")
+
+dens_plot_s <- ggplot(molten_vals, aes(x = value, color = variable))
+dens_plot_s <- dens_plot_s + stat_density(geom = "line", size = 1.125) + theme_bw() 
+dens_plot_s <- dens_plot_s + scale_color_manual(values = c("red", "darkcyan", "grey"))
+if(!is.null(params$s)) {
+  dens_plot_s <- dens_plot_s + geom_vline(aes(xintercept = params$s), linetype = "dashed", color = "black", size = 0.85)
+}
+dens_plot_s <- dens_plot_s + labs(title = NULL, x = "|s|", y = "Posterior Density") 
+dens_plot_s <- dens_plot_s + scale_x_log10()
+dens_plot_s <- dens_plot_s + theme(text = element_text(size = 14), 
+                               legend.position = "right",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16))
+dens_plot_s
+
+# h density
+dat_h <- dplyr::select(dat, ends_with("_h")) 
+dat_h$sim <- 1:nrow(dat_h)
+molten_vals <- melt(dat_h, id.vars = "sim")
+
+dens_plot_h <- ggplot(molten_vals, aes(x = value, color = variable))
+dens_plot_h <- dens_plot_h + stat_density(geom = "line", size = 1.125) + theme_bw() 
+dens_plot_h <- dens_plot_h + scale_color_manual(values = c("red", "darkcyan", "grey"))
+if(!is.null(params$h)) {
+  dens_plot_h <- dens_plot_h + geom_vline(aes(xintercept = params$h), linetype = "dashed", color = "black", size = 1)
+}
+dens_plot_h <- dens_plot_h + labs(title = NULL, x = "h", y = "Posterior Density") 
+dens_plot_h <- dens_plot_h + theme(text = element_text(size = 14), 
+                               legend.position = "right",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18), 
+                               axis.title.y = element_text(size = 16))
+dens_plot_h
+
+# puts h and s on the same plot, adding the 95% CI of each distribution (dashed lines).
+s_hpdi <- HPDI(dat$neuralnet_s, prob = 0.95)
+h_hpdi <- HPDI(dat$neuralnet_h, prob = 0.95)
+
+post_scatter <- ggplot(data = dat, aes(y = neuralnet_s, x = neuralnet_h))
+post_scatter <- post_scatter + geom_point(shape = 16, size = 2,  alpha = 0.15) + theme_bw()
+post_scatter <- post_scatter + labs(title = NULL, x = "h", y = "|s|")
+post_scatter <- post_scatter + theme(axis.text.x = element_text(size = 14),
+                                     axis.text.y = element_text(size = 14),
+                                     axis.title.x = element_text(size = 24),
+                                     axis.title.y = element_text(size = 24))
+if(!is.null(params$h)) {
+  post_scatter <- post_scatter + geom_vline(aes(xintercept = params$h), color = "blue")
+}
+post_scatter <- post_scatter + geom_vline(aes(xintercept = h_hpdi[1]), color = "blue", linetype = "dashed", size = 0.5)
+post_scatter <- post_scatter + geom_vline(aes(xintercept = h_hpdi[2]), color = "blue", linetype = "dashed", size = 0.5)
+if(!is.null(params$s)) {
+  post_scatter <- post_scatter + geom_hline(aes(yintercept = params$s), color = "red")
+}
+post_scatter <- post_scatter + geom_hline(aes(yintercept = s_hpdi[1]), color = "red", linetype = "dashed", size = 0.5)
+post_scatter <- post_scatter + geom_hline(aes(yintercept = s_hpdi[2]), color = "red", linetype = "dashed", size = 0.5)
+post_scatter <- post_scatter + geom_density2d(colour = "green")
+post_scatter <- post_scatter + scale_x_continuous(breaks = pretty_breaks())
+post_scatter <- post_scatter + scale_y_log10(breaks = pretty_breaks())
+post_scatter
+```
+

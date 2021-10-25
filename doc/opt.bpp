@@ -1,0 +1,39 @@
+# boolean, whether to simulate 'observed kids' from parental genomes
+sim_kids = # if true, children_file and trio_ids_file are obsolete
+sim_s = # selection coefficient when simulating kids
+sim_h = # dominance coefficient when simulating kids
+kids_per_couple = # number of engineered kids per couple
+downsample = # choose n kids at random (n < total number of kids)
+
+##################################################################
+
+# the type of file compression used in the VCFs [OPTIONS]
+seq_compression = ['zip', 'bzip2', 'gzip' OR 'none']
+
+# the (relative) paths to VCF files, e.g.:
+mothers_file = mothers.vcf.gz
+fathers_file = fathers.vcf.gz
+children_file = children.vcf.gz
+
+# the (relative) path to a tab-separated file indicating
+# the 'relatedness' among indv. IDs (reported as in the VCF header):
+## there must be a HEADER, eg.: child_id	mother_id	father_id
+trio_ids_file = trio_ids.txt
+
+# the (relative) path to (sex-specific) recombination maps:
+female_rmap_path = frmap.bedgraph
+male_rmap_path = mrmap.bedgraph
+
+mu = 6.410323e-09 # de novo mutation rate per nucleotide
+seq_len = 66886433 # total seq. length (number of sites for mu)
+
+# range of uniform priors in the pilot run
+# comma-separated values within parenthesis:
+s_interval = # DEFAULT = (1.0,6.0) log-uniform in powers of 10 (1e-x)
+h_interval = # DEFAULT = (0.0,0.6)
+
+num_threads = # integer, DEFAULT = use all available cores
+num_pilot = # integer, size of pilot run to improve prior dist, DEFAULT = 3000000
+num_sims = # integer, number of simulations, DEFAULT = 18000000
+num_meiosis = # integer, DEFAULT = 150
+num_accepted = # integer, number of accepted pilot simulations

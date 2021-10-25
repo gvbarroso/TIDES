@@ -1,0 +1,377 @@
+---
+title: "Example run of TIDES"
+author: "Gustavo V. Barroso"
+date: "26/November/2020"
+output:
+  pdf_document: 
+  toc: true
+  number_sections: true
+---
+
+This document walks the user through all the steps from generating trio sequence data to using TIDES and plotting the results. It refers to R and bash scripts found in the 'tools' directory.
+The user is welcome to make changes to the simulation pipeline in order to test hers/his hypotheses.
+
+# Installig SLiM
+
+At the time of this writing, no large dataset of trio sequence data is publicly available for direct download. This is unfortunate, as it
+contributes to the reproducibility crisis in science, and forces us to move on with simulated data.
+Luckily we can do that very efficiently using SLiM (https://github.com/MesserLab/SLiM). 
+
+Installing SLiM on a local machine is quite easy. Therefore, here I present the solution that worked for installing it on the UCLA
+cluster since this could be useful.
+
+Download and uncompress SLiM.
+
+
+```{bash, eval = F}
+	wget http://benhaller.com/slim/SLiM.zip
+	
+	unzip SLiM.zip
+```
+
+
+Make build directory.
+
+
+```{bash, eval = F}
+	mkdir slim_build
+	
+	cd slim_build
+```
+
+
+Load newer version of gcc.
+
+
+```{bash, eval = F}
+	module load gcc/9.3.0
+```
+
+
+Tell cmake which one to use and compile.
+
+
+```{bash, eval = F}
+	CC=gcc CXX=g++ cmake ../SLiM
+	
+	make slim
+```
+
+
+Executing SLiM may involve loading the gcc/9.3.0 module in your job submission script, similar to TIDES (see Manual).
+
+
+# Generating input files
+
+The script 'get_hg_data.R' will walk the user through putting together the pieces for simulating a human-like exome. It will output
+the files 'human_genome.txt' and 'chr_limits.txt' as well as sex-specific recombination maps formatted to fit our goals.
+For convenience, these text files are also given in this directory.
+
+The script 'write_slim_script.R' puts the pieces together in Eidos syntax and have them ready to be executed by SLiM.
+Although it may be overkill to use R to write a SLiM script for a single replicate of a single evolutionary scenario, there's no harm done.
+By slightly changing this script, users with basic experience with R and SLiM will be able to tailor their simulations to investigate scenarios they are interested in.
+Once again, here we provide the file 'test_script.slim' for convenience.
+
+Note that the VCF files output by SLiM will be quite large (>50 Gb each). 
+We will compress them at the end, however, **make sure you have enough disk space temporarily available!** 
+
+We then run SLiM (**this may take several hours to run!**).
+
+
+```{bash, eval = F}
+	./slim test_script.slim
+```
+
+
+At the end of the simulation, two VCF files will be output (all females and all males from generation 58151). 
+Compress it to save a lot of disk space.
+
+
+```{bash, eval = F}
+	bgzip potential_mothers.vcf
+	bgzip potential_fathers.vcf
+```
+
+
+Since under the hood SLiM treats the entire simulated sequence as one chromosome, the CHROM column of the VCF will be '1' for all sites. To match the CHROM labels from VCFs and recombination maps, we will need the file 'chr_limits.txt' which was output by 'get_hg_data.R'. The script 'filter_vcfs.sh' will then use 'format_vcf.R' to edit the CHROM column of the simulated VCFs. Just put
+'chr_limits.txt', 'filter_vcfs.sh' and 'format_vcf.R' in the same folder as the compressed VCF files, then execute
+
+
+```{bash, eval = F}
+	./filter_vcfs.sh
+```
+
+
+**This script also temporarily outputs large uncompressed VCF files**, so make sure to delete them at the end!
+When it's done, the input files for TIDES are ready (mothers.vcf.gz and fathers.vcf.gz). We can double-check if the conversion was successful by inspecting the CHROM column of the formatted VCF files (you should see the labels 'chr1', 'chr2', etc., instead of '1' for all sites).
+
+
+```{bash, eval = F}
+	zcat mothers.vcf.gz | cut -f 1
+	
+	zcat fathers.vcf.gz | cut -f 1
+```
+
+
+# Simulating 'observed' children
+
+Our SLiM script outputs all males and females of the last simulated generation. We wil load these two (compressed) VCF files and use an
+alternative mode of TIDES where the program itself simulates children according to user-specified s and h values. The input files are the same as before, except the children's VCF is now absent. Futhermore, since we will fit four different models to these data, we will need to fix a random seed for the simulation of children ('seed' option in opt.bpp). Options files for four different models ('additive', 'full', 'neutral' and 'recessive') are provided here. We must fit each of these models separately (you can do that inside their respective directories). We can take a closer look at full_model_opt.bpp to better understand the options.
+
+Tells TIDES to simulate children.
+
+  	sim_kids = true
+
+Tells which s and h to use for viability selection (same as SLiM simulation, except s is unsigned).
+
+	sim_s = 0.01
+	sim_h = 0.0
+
+Sets random seed for simulating children (must be the same across all models).
+
+	seed = 42
+	
+How many zygotes per couple **before** viability selection happens.
+
+	kids_per_couple = 10
+
+We downsample, in order to run TIDES faster and match the number of trios in case we want to compare the results with other simulations.
+
+	downsample = 50000
+
+The type of compression used in the VCFs.
+
+	seq_compression = gzip
+	
+The (relative) paths to VCF files (again, children's VCF is ommited because TIDES itself is simulating them).
+
+	mothers_file = ../mothers.vcf.gz
+	fathers_file = ../fathers.vcf.gz
+
+Recombination maps output by 'get_hg_data.R'.
+
+	female_rmap_path = ../frmap_exome.bedgraph
+	male_rmap_path = ../mrmap_exome.bedgraph
+	
+Range of priors in the pilot run for the 'full' model.
+
+	s_interval = (1.0, 6.6) # log-uniform
+	h_interval = (0.0, 0.6) # uniform
+
+How many cores TIDES is allowed to use from your computer (DEFAULT = all cores, which will run faster, but specify less if you are running other tasks at the same time).
+
+	num_threads = 
+
+Simulation options (we use somewhat smaller figures to make it run faster).
+
+	num_pilot = 1000000
+	num_sims = 10000000
+	num_meiosis = 100
+	num_accepted = 1000
+
+Using 16 cores from a 3.5 Ghz machine, this takes ~24h to run (for each model).
+When TIDES finishes, it will output 'sim_params_dist.gz' and 'sum_stats_dist.gz' to the working directory.	
+
+After that, the real fun begins -- visualizing the results!
+Here we go step by step, from model selection to plotting the posterior distributions. 
+
+```{r setup, message=FALSE, warning=FALSE, include=FALSE}
+
+knitr::opts_chunk$set(echo=T)
+
+library(reshape2)
+library(cowplot)
+library(tidyverse)
+library(abc)
+library(rethinking)
+library(scales)
+library(knitr)
+```
+
+# Loading simulated parameters and summary statistics
+
+We load simulation results from four different models fit to the same data:
+We will use these simulations to perform model selection and parameter inference later on.
+
+```{r, message=FALSE, warning=FALSE}
+
+# observed summary statistics are the same for all models, we arbitrarily pick one:
+obs_sum_stats <- read.table("full_model/obs_sum_stats.txt", header = T)
+
+# summary statistics under each model
+sim_sum_stats_additive <- read.table(gzfile("additive_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_recessive <- read.table(gzfile("recessive_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_neutral <- read.table(gzfile("neutral_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_full <- read.table(gzfile("full_model/sum_stats_dist.gz"), header = T)
+sim_sum_stats_models <- rbind.data.frame(sim_sum_stats_additive, 
+                                         sim_sum_stats_recessive, 
+                                         sim_sum_stats_neutral,
+                                         sim_sum_stats_full)
+
+# parameter draws under each model
+sim_params_additive <- read.table(gzfile("additive_model/sim_params_dist.gz"), header = T)
+sim_params_recessive <- read.table(gzfile("recessive_model/sim_params_dist.gz"), header = T)
+sim_params_neutral <- read.table(gzfile("neutral_model/sim_params_dist.gz"), header = T)
+sim_params_full <- read.table(gzfile("full_model/sim_params_dist.gz"), header = T)
+sim_params_models <- rbind.data.frame(sim_params_additive, 
+                                      sim_params_recessive, 
+                                      sim_params_neutral,
+                                      sim_params_full)
+
+# model indicators
+models <- c(rep("additive", params$n),
+            rep("recessive", params$n),
+            rep("neutral", params$n),
+            rep("full", params$n))
+```
+
+# Visualization of Summary Statistics 
+
+We plot the distribution of simulated summary statistics per model (colored clouds).  
+The red start denotes the observed summary statistic.
+
+```{r, message=FALSE, warning=FALSE}
+
+# 2D
+sum_stats_2d <- cbind.data.frame(sim_sum_stats_models[models != "full",], models[models != "full"])
+sum_stats_2d_ds <- sample_n(sum_stats_2d, 6e+4) # downsample otherwise plot is too big
+names(sum_stats_2d_ds)[3] <- "models"
+
+ss2d <- ggplot(data = sum_stats_2d_ds, aes(x = diff_het, y = diff_homo, color = models))
+ss2d <- ss2d + geom_point(shape = 16, size = 2,  alpha = 0.15) + theme_bw()
+ss2d <- ss2d + labs(title = NULL, x = "diff_het", y = "diff_homo")
+ss2d <- ss2d + scale_color_manual(values = c("#7fc97f", "#beaed4", "#fdc086"))
+ss2d <- ss2d + guides(colour = guide_legend(override.aes = list(alpha = 1))) 
+ss2d <- ss2d + theme(axis.text.x = element_text(size = 14),
+                     axis.text.y = element_text(size = 14),
+                     axis.title.x = element_text(size = 20),
+                     axis.title.y = element_text(size = 20))
+ss2d <- ss2d + geom_point(x = obs_sum_stats$diff_het, y = obs_sum_stats$diff_homo, col = 'red', shape = 8, size = 6)
+ss2d
+```
+
+# Model selection
+
+We now select across different evolutionary scenarios (models).
+Since the "full" model overlaps with the others, we only select among "additive", "neutral" and "recessive".
+
+```{r, include=FALSE}
+
+tolerance <- 1e-3 # feel free to play with the ABC rejection tolerance
+
+fixed_models <- models[models != "full"] # excludes full model
+sim_sum_stats_fixed_models <- sim_sum_stats_models[models %in% fixed_models,]
+
+mod_sel <- invisible(postpr(target = obs_sum_stats, index = fixed_models, sumstat = sim_sum_stats_fixed_models, method = "neuralnet", tol = tolerance))
+summary(mod_sel)
+
+write.table(mod_sel$pred, "models_post_probs.txt", col.names = F, row.names = F, quote = F, sep = "\t") # for plotting later on
+```
+
+```{r, echo=FALSE, results='asis'}
+mpp <- read.table("models_post_probs.txt", sep = "\t", header = F)
+names(mpp) <- c("Model", "Posterior Probability")
+kable(mpp)
+
+# the model simulated in test_script.slim
+cat("True (simulated) model: RECESSIVE")
+
+```
+
+# Parameter Inference
+
+Here we infer and plot posterior distributions for s and h.
+
+```{r, message=FALSE, warning=FALSE}
+
+sim_s <- 0.01 # s used in test_script.slim
+sim_h <- # h used in test_script.slim
+
+tolerance <- 1e-3 # feel free to play with the ABC rejection tolerance
+
+model <- "full" # in most cases we are interested in the full model (with least assumption)
+
+res_reject <- abc(target = obs_sum_stats,
+                  param = sim_params_models[models == model,],
+                  sumstat = sim_sum_stats_models[models == model,],
+                  tol = tolerance,
+                  method = "rejection")
+
+res_neuralnet <- invisible(abc(target = obs_sum_stats,
+                     param = sim_params_models[models == model,],
+                     sumstat = sim_sum_stats_models[models == model,],
+                     kernel = "epanechnikov", 
+                     tol = tolerance, method = "neuralnet",
+                     numnet = 6, transf = "log"))
+
+samp_size <- params$n * params$tol
+prior_h <- runif(samp_size, 0, 0.6) # same as h_interval in TIDES's options file
+prior_s <- 10^(-runif(samp_size, 1, 6)) # same as s_interval in TIDES's options file
+
+# merges all parameter values (priors and posteriors) into one table:
+dat <- cbind.data.frame(res_neuralnet$adj.values, res_reject$unadj.values, prior_h, prior_s)
+names(dat) <- c("neuralnet_h", "neuralnet_s", "rejection_h", "rejection_s", "prior_h", "prior_s")
+
+# writes posterior distributions to files
+write.table(dat$neuralnet_h, "posterior_dist_h.txt", quote = F, col.names = F, row.names = F, sep = "\n")
+write.table(dat$neuralnet_s, "posterior_dist_s.txt", quote = F, col.names = F, row.names = F, sep = "\n")
+
+# plot for h and h s posterior density, adding a line with the simulated values of s and h
+
+# s density
+dat_s <- dplyr::select(dat, ends_with("_s")) 
+dat_s$sim <- 1:nrow(dat_s)
+molten_vals <- melt(dat_s, id.vars = "sim")
+
+dens_plot_s <- ggplot(molten_vals, aes(x = value, color = variable))
+dens_plot_s <- dens_plot_s + stat_density(geom = "line", size = 1.125) + theme_bw() 
+dens_plot_s <- dens_plot_s + scale_color_manual(values = c("red", "darkcyan", "grey"))
+dens_plot_s <- dens_plot_s + geom_vline(aes(xintercept = sim_s), linetype = "dashed", color = "black", size = 0.85)
+dens_plot_s <- dens_plot_s + labs(title = NULL, x = "|s|", y = "Posterior Density") 
+dens_plot_s <- dens_plot_s + scale_x_log10()
+dens_plot_s <- dens_plot_s + theme(text = element_text(size = 14), 
+                               legend.position = "right",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16))
+dens_plot_s
+
+# h density
+dat_h <- dplyr::select(dat, ends_with("_h")) 
+dat_h$sim <- 1:nrow(dat_h)
+molten_vals <- melt(dat_h, id.vars = "sim")
+
+dens_plot_h <- ggplot(molten_vals, aes(x = value, color = variable))
+dens_plot_h <- dens_plot_h + stat_density(geom = "line", size = 1.125) + theme_bw() 
+dens_plot_h <- dens_plot_h + scale_color_manual(values = c("red", "darkcyan", "grey"))
+dens_plot_h <- dens_plot_h + geom_vline(aes(xintercept = sim_h), linetype = "dashed", color = "black", size = 1)
+dens_plot_h <- dens_plot_h + labs(title = NULL, x = "h", y = "Posterior Density") 
+dens_plot_h <- dens_plot_h + theme(text = element_text(size = 14), 
+                               legend.position = "right",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18), 
+                               axis.title.y = element_text(size = 16))
+dens_plot_h
+
+# puts h and s on the same plot, adding the 95% CI of each distribution (dashed lines).
+s_hpdi <- HPDI(dat$neuralnet_s, prob = 0.95)
+h_hpdi <- HPDI(dat$neuralnet_h, prob = 0.95)
+
+post_scatter <- ggplot(data = dat, aes(y = neuralnet_s, x = neuralnet_h))
+post_scatter <- post_scatter + geom_point(shape = 16, size = 2,  alpha = 0.15) + theme_bw()
+post_scatter <- post_scatter + labs(title = NULL, x = "h", y = "|s|")
+post_scatter <- post_scatter + theme(axis.text.x = element_text(size = 14),
+                                     axis.text.y = element_text(size = 14),
+                                     axis.title.x = element_text(size = 24),
+                                     axis.title.y = element_text(size = 24))
+post_scatter <- post_scatter + geom_vline(aes(xintercept = sim_s), color = "blue")
+post_scatter <- post_scatter + geom_vline(aes(xintercept = h_hpdi[1]), color = "blue", linetype = "dashed", size = 0.5)
+post_scatter <- post_scatter + geom_vline(aes(xintercept = h_hpdi[2]), color = "blue", linetype = "dashed", size = 0.5)
+post_scatter <- post_scatter + geom_hline(aes(yintercept = sim_h), color = "red")
+post_scatter <- post_scatter + geom_hline(aes(yintercept = s_hpdi[1]), color = "red", linetype = "dashed", size = 0.5)
+post_scatter <- post_scatter + geom_hline(aes(yintercept = s_hpdi[2]), color = "red", linetype = "dashed", size = 0.5)
+post_scatter <- post_scatter + geom_density2d(colour = "green")
+post_scatter <- post_scatter + scale_x_continuous(breaks = pretty_breaks())
+post_scatter <- post_scatter + scale_y_continuous(breaks = pretty_breaks())
+post_scatter
+```

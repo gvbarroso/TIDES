@@ -1,0 +1,53 @@
+Dependencies:
+- A C++ compiler, both gcc and clang should work. Recent versions are required, with support for C++17.
+- CMake >= 3.1 for building
+- The Boost C++ libraries (versions 1.66 to 1.71, available in https://www.boost.org/).
+- The Threads library (usually provided along with the C++ compiler installation).
+
+Installation of TIDES:
+
+mkdir build
+cd build
+cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local .. (for a local install)
+make
+make install
+
+It is possible to generate a static executable, with all dependencies imbeded, so that it can be copied to a remote computer / cluster:
+
+mkdir build
+cd build
+cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local -DBUILD_STATIC=ON ..
+make
+make install
+
+The 'tides' executable will then be copied in $HOME/.local/bin .
+
+On a standard linux workstation, TIDES takes ~ 2 minutes to compile and install once all dependencies are met.
+
+
+
+NOTE ABOUT COMPUTING CLUSTERS:
+
+It is possible that the default versions of gcc and cmake on computing clusters will not meet the aforementioned requirements.
+To fix this, one can execute, e.g.,
+
+module load gcc/9.3.0
+
+module load cmake/3.7.2
+
+in the interactive session that is used to build TIDES.
+
+I have also noticed that cmake may have problems finding the Boost installation when working on a cluster.
+To work around this problem one can execute (from the external build directory):
+
+ccmake ..
+
+then press "t" to enter "advanced" mode and edit the BOOST lines at the top of the GUI by pressing "enter" and enter the correct path.
+
+then press "c" to configure and "g" to generate the make file. If the make file is generated successfully, one can then run "make install".
+
+Once the Boost libraries are eventually found by cmake, compiling TIDES on a cluster may throw several warnings regarding Boost, but they can be ignored.
+
+Yet another approach to running TIDES on a cluster is to generate a static executable on your local machine (see above), but some clusters have an outdated kernel and will throw the following error when executing tides: "FATAL: Kernel too old."
+
+

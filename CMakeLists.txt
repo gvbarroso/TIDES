@@ -1,0 +1,148 @@
+# CMake script for TIDES
+# Authors:
+#   Gustavo V. Barroso
+# Created: 24/10/2019
+
+cmake_minimum_required (VERSION 3.1.0)
+project (tides CXX)
+
+# Compile options (flags after -O3 make thread work w/ static linkage)
+SET (CMAKE_CXX_FLAGS "-std=c++17 -Weffc++ -Wshadow -Wall -ffast-math -O3 -lrt -pthread -Wl,--whole-archive -lpthread -Wl,--no-whole-archive")
+
+IF(NOT CMAKE_BUILD_TYPE)
+  SET(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
+      "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
+      FORCE)
+ENDIF(NOT CMAKE_BUILD_TYPE)
+
+IF(NOT NO_DEP_CHECK)
+  SET(NO_DEP_CHECK FALSE CACHE BOOL
+      "Disable dependencies check for building distribution only."
+      FORCE)
+ENDIF(NOT NO_DEP_CHECK)
+
+IF(NO_DEP_CHECK)
+  MESSAGE("-- Dependencies checking disabled. Only distribution can be built.")
+ELSE(NO_DEP_CHECK)
+
+
+# Static linkage?
+IF(NOT BUILD_STATIC)
+  SET(BUILD_STATIC FALSE CACHE BOOL
+      "Enable static linkage."
+      FORCE)
+ENDIF()
+IF(BUILD_STATIC)
+  MESSAGE("-- Static linkage requested.")
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  set(CMAKE_EXE_LINKER_FLAGS "-static -static-libgcc -static-libstdc++")
+ENDIF()
+
+
+# Find dependencies (add install directory to search)
+IF(CMAKE_INSTALL_PREFIX)
+  SET(CMAKE_PREFIX_PATH "${CMAKE_INSTALL_PREFIX}" ${CMAKE_PREFIX_PATH})
+ENDIF(CMAKE_INSTALL_PREFIX)
+
+INCLUDE(GNUInstallDirs)
+SET(THREADS_PREFER_PTHREAD_FLAG ON)
+FIND_PACKAGE(Threads REQUIRED)
+
+# Boost:
+SET(Boost_USE_STATIC_LIBS ${BUILD_STATIC})
+SET(Boost_USE_MULTITHREADED OFF)
+FIND_PACKAGE( Boost 1.67.0 REQUIRED COMPONENTS "iostreams")
+IF(Boost_FOUND)
+  INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
+  SET(LIBS ${LIBS} ${Boost_LIBRARIES})
+  MESSAGE("-- Boost libraries found here:")
+  MESSAGE("   includes: ${Boost_INCLUDE_DIRS}")
+  MESSAGE("   dynamic libraries: ${Boost_LIBRARIES}")
+ENDIF()
+
+#here is a useful function:
+MACRO(IMPROVED_FIND_LIBRARY OUTPUT_LIBS lib_name include_to_find)
+  #start:
+  FIND_PATH(${lib_name}_INCLUDE_DIR ${include_to_find})
+  INCLUDE_DIRECTORIES(${${lib_name}_INCLUDE_DIR})
+
+  IF(BUILD_STATIC)
+    SET(${lib_name}_STATIC_NAMES lib${lib_name}.a)
+    FIND_LIBRARY(${lib_name}_STATIC_LIBRARY NAMES ${${lib_name}_STATIC_NAMES} PATH_SUFFIXES lib${LIB_SUFFIX})
+    IF(${lib_name}_STATIC_LIBRARY)
+      MESSAGE("-- Library ${lib_name} found here:")
+      MESSAGE("   includes: ${${lib_name}_INCLUDE_DIR}")
+      MESSAGE("   static libraries: ${${lib_name}_STATIC_LIBRARY}")
+    ELSE()
+      MESSAGE(FATAL_ERROR "${lib_name} required but not found.")
+    ENDIF()
+    #add the dependency:
+    SET(${OUTPUT_LIBS} ${${OUTPUT_LIBS}} ${${lib_name}_STATIC_LIBRARY})
+  ELSE()
+    SET(${lib_name}_NAMES ${lib_name} ${lib_name}.lib ${lib_name}.dll)
+    FIND_LIBRARY(${lib_name}_LIBRARY NAMES ${${lib_name}_NAMES} PATH_SUFFIXES lib${LIB_SUFFIX})
+    IF(${lib_name}_LIBRARY)
+      MESSAGE("-- Library ${lib_name} found here:")
+      MESSAGE("   includes: ${${lib_name}_INCLUDE_DIR}")
+      MESSAGE("   dynamic libraries: ${${lib_name}_LIBRARY}")
+    ELSE()
+      MESSAGE(FATAL_ERROR "${lib_name} required but not found.")
+    ENDIF()
+    #add the dependency:
+    SET(${OUTPUT_LIBS} ${${OUTPUT_LIBS}} ${${lib_name}_LIBRARY})
+  ENDIF()
+  
+ENDMACRO(IMPROVED_FIND_LIBRARY)
+
+# Set the CMAKE_PREFIX_PATH for the find_library fonction when using non
+# standard install location
+IF(CMAKE_INSTALL_PREFIX)
+  SET(CMAKE_PREFIX_PATH "${CMAKE_INSTALL_PREFIX}" ${CMAKE_PREFIX_PATH})
+ENDIF(CMAKE_INSTALL_PREFIX)
+
+
+# Find the zlib installation
+IMPROVED_FIND_LIBRARY(LIBS z zlib.h)
+
+# Find the bz2 installation
+IMPROVED_FIND_LIBRARY(LIBS bz2 bzlib.h)
+
+# Subdirectories
+ADD_SUBDIRECTORY(src)
+
+ENDIF(NO_DEP_CHECK)
+
+# Packager
+SET(CPACK_PACKAGE_NAME "tides")
+SET(CPACK_PACKAGE_VENDOR "Gustavo V. Barroso")
+SET(CPACK_PACKAGE_VERSION "0.1.0")
+SET(CPACK_PACKAGE_VERSION_MAJOR "0")
+SET(CPACK_PACKAGE_VERSION_MINOR "1")
+SET(CPACK_PACKAGE_VERSION_PATCH "0")
+SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Inferring Selection using Family Trios")
+#SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING.txt")
+#SET(CPACK_RESOURCE_FILE_AUTHORS "${CMAKE_SOURCE_DIR}/AUTHORS.txt")
+#SET(CPACK_RESOURCE_FILE_INSTALL "${CMAKE_SOURCE_DIR}/INSTALL.txt")
+SET(CPACK_SOURCE_GENERATOR "TGZ")
+# /!\ This assumes that an external build is used
+SET(CPACK_SOURCE_IGNORE_FILES 
+       "/build/" 
+       "/\\\\.git/" 
+       "/\\\\.gitignore" 
+       ${CPACK_SOURCE_IGNORE_FILES}
+       )
+
+SET(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
+SET(CPACK_DEBSOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}_${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.orig")
+INCLUDE(CPack)
+
+#This adds the 'dist' target
+ADD_CUSTOM_TARGET(dist COMMAND ${CMAKE_MAKE_PROGRAM} package_source)
+
+IF(NOT NO_DEP_CHECK)
+IF (UNIX)
+
+ENDIF(UNIX)
+
+ENDIF(NOT NO_DEP_CHECK)
+
