@@ -522,3 +522,141 @@ for(i in 1:length(start_indices)) {
   cowplot::save_plot(plot_name, ss2d_reps, device = "pdf", dpi = 500, base_height = 32, base_width = 16, limitsize = F)
 }
 close(pb)
+
+######################
+#
+# tight linkage
+#
+######################
+
+setwd("~/Data/TIDES/paper_1/tight_linkage/")
+
+start_index <- 1
+nreps <- 10
+npost <- 2e+3
+
+# s
+post_dists_s_10X <- as.data.frame(matrix(nrow = npost, ncol = 10))
+names(post_dists_s_10X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+
+# focal SNP with 10X stronger selection as linked SNPs
+for(i in 1:nreps){
+  post_dists_s_10X[,i] <- read.table(paste("10X_bgs/rep_", i, "/params_post_dist.tsv", sep = ""), header = T)$loclinear_s
+}
+
+molten_s_10X <- melt(post_dists_s_10X)
+
+s_median_10X <- apply(post_dists_s_10X, 2, median)
+s_hpdi_10X <- apply(post_dists_s_10X, 2, HPDI, prob = 0.95)
+
+post_dists_s_1X <- as.data.frame(matrix(nrow = npost, ncol = 10))
+names(post_dists_s_1X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+
+for(i in 1:nreps){
+  post_dists_s_1X[,i] <- read.table(paste("1X_bgs/rep_", i, "/params_post_dist.tsv", sep = ""), header = T)$neuralnet_s
+}
+
+molten_s_1X <- melt(post_dists_s_1X)
+
+s_median_1X <- apply(post_dists_s_1X, 2, median)
+s_hpdi_1X <- apply(post_dists_s_1X, 2, HPDI, prob = 0.95)
+
+s_hpdi <- rbind.data.frame(s_hpdi_1X, s_hpdi_10X)
+s_hpdi$bound_95 <- c("upper", "lower", "upper", "lower")
+s_hpdi$model <- as.factor(c("1X", "1X", "10X", "10X"))
+s_hpdi_lower <- s_hpdi[s_hpdi$bound_95 == "lower",]
+s_hpdi_upper <- s_hpdi[s_hpdi$bound_95 == "upper",]
+molten_ci_lower <- melt(s_hpdi_lower)
+molten_ci_upper <- melt(s_hpdi_upper)
+
+s_medians <- rbind.data.frame(s_median_1X, s_median_10X)
+names(s_medians) <- paste("rep_", 1:nreps, sep = "")
+s_medians$model <- c(1, 10)
+
+molten_medians <- melt(s_medians, id.vars = "model")
+molten_medians$lower <- molten_ci_lower$value
+molten_medians$upper <- molten_ci_upper$value
+
+dotplot_s <- ggplot(molten_medians, aes(x = as.factor(model), y = abs(value)))
+dotplot_s <- dotplot_s + scale_y_log10(limits = c(1e-3, 1), breaks = c(1e-3, 1e-2, 1e-1, 1)) 
+dotplot_s <- dotplot_s + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = abs(value), group = variable, ymin = abs(lower), ymax = abs(upper)),
+                                         alpha = 0.5, fatten = 5, size = 1) 
+dotplot_s <- dotplot_s + theme_bw()
+dotplot_s <- dotplot_s + labs(title = NULL, x = "Model", y = "Inferred |s|") 
+dotplot_s <- dotplot_s + geom_segment(aes(x = 0.7, xend = 1.3, y = 1e-1, yend = 1e-1))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 1.7, xend = 2.3, y = 1e-1, yend = 1e-1))
+dotplot_s <- dotplot_s + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_s
+ggsave("dotplot_s.pdf", dotplot_s, device = "pdf", dpi = 500, width = 5, height = 5)
+
+# h
+post_dists_h_10X <- as.data.frame(matrix(nrow = npost, ncol = 10))
+names(post_dists_h_10X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+
+# focal SNP with 10X stronger selection as linked SNPs
+for(i in 1:nreps){
+  post_dists_h_10X[,i] <- read.table(paste("10X_bgs/rep_", i, "/params_post_dist.tsv", sep = ""), header = T)$loclinear_h
+}
+
+molten_h_10X <- melt(post_dists_h_10X)
+
+h_median_10X <- apply(post_dists_h_10X, 2, median)
+h_hpdi_10X <- apply(post_dists_h_10X, 2, HPDI, prob = 0.95)
+
+post_dists_h_1X <- as.data.frame(matrix(nrow = npost, ncol = 10))
+names(post_dists_h_1X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+
+for(i in 1:nreps){
+  post_dists_h_1X[,i] <- read.table(paste("1X_bgs/rep_", i, "/params_post_dist.tsv", sep = ""), header = T)$neuralnet_h
+}
+
+molten_h_1X <- melt(post_dists_h_1X)
+
+h_median_1X <- apply(post_dists_h_1X, 2, median)
+h_hpdi_1X <- apply(post_dists_h_1X, 2, HPDI, prob = 0.95)
+
+h_hpdi <- rbind.data.frame(h_hpdi_1X, h_hpdi_10X)
+h_hpdi$bound_95 <- c("upper", "lower", "upper", "lower")
+h_hpdi$model <- as.factor(c("1X", "1X", "10X", "10X"))
+h_hpdi_lower <- h_hpdi[h_hpdi$bound_95 == "lower",]
+h_hpdi_upper <- h_hpdi[h_hpdi$bound_95 == "upper",]
+molten_ci_lower <- melt(h_hpdi_lower)
+molten_ci_upper <- melt(h_hpdi_upper)
+
+h_medians <- rbind.data.frame(h_median_1X, h_median_10X)
+names(h_medians) <- paste("rep_", 1:nreps, sep = "")
+h_medians$model <- c(1, 10)
+
+molten_medians <- melt(h_medians, id.vars = "model")
+molten_medians$lower <- molten_ci_lower$value
+molten_medians$upper <- molten_ci_upper$value
+
+dotplot_h <- ggplot(molten_medians, aes(x = as.factor(model), y = value))
+dotplot_h <- dotplot_h + scale_y_continuous(limits = c(-0.6, 0.6), breaks = pretty_breaks()) 
+dotplot_h <- dotplot_h + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = value, group = variable, ymin = lower, ymax = upper,),
+                                         alpha = 0.5, fatten = 5, size = 1) 
+dotplot_h <- dotplot_h + theme_bw()
+dotplot_h <- dotplot_h + labs(title = NULL, x = "Model", y = "Inferred h") 
+dotplot_h <- dotplot_h + geom_segment(aes(x = 0.7, xend = 1.3, y = 0, yend = 0))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 1.7, xend = 2.3, y = 0, yend = 0))
+dotplot_h <- dotplot_h + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_h
+ggsave("dotplot_h.pdf", dotplot_h, device = "pdf", dpi = 500, width = 5, height = 5)
+
+post_dists <- plot_grid(dotplot_s, dotplot_h, ncol = 1, labels = "AUTO", label_size = 20)
+
+cowplot::save_plot("post_dists_tight.pdf", plot = post_dists, device = "pdf", dpi = 500, base_width = 8, base_height = 12)
+
+
