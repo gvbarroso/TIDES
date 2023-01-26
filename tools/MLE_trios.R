@@ -6,8 +6,8 @@
 library(stats4)
 library(iterpc)
 
-file <- readLines("genotype_counts.txt")
-obs <- cbind.data.frame(t(rbind.data.frame(strsplit(counts[9:15], " "))))[11]
+file <- readLines("genotype_counts.txt") 
+obs <- cbind.data.frame(t(rbind.data.frame(strsplit(file[9:15], " "))))[11]
 row.names(obs) <- paste("c", 1:7, sep="")
 colnames(obs) <- "count"
 obs[,1] <- as.numeric(obs[,1])

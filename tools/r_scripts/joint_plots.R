@@ -523,11 +523,11 @@ for(i in 1:length(start_indices)) {
 }
 close(pb)
 
-######################
+##################################
 #
 # tight linkage
 #
-######################
+##################################
 
 setwd("~/Data/TIDES/paper_1/tight_linkage/")
 
@@ -536,8 +536,8 @@ nreps <- 10
 npost <- 2e+3
 
 # s
-post_dists_s_10X <- as.data.frame(matrix(nrow = npost, ncol = 10))
-names(post_dists_s_10X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+post_dists_s_10X <- as.data.frame(matrix(nrow = npost, ncol = nreps))
+names(post_dists_s_10X) <- c(paste("rep_", seq(from = 1, to = nreps), sep = ""))
 
 # focal SNP with 10X stronger selection as linked SNPs
 for(i in 1:nreps){
@@ -549,8 +549,8 @@ molten_s_10X <- melt(post_dists_s_10X)
 s_median_10X <- apply(post_dists_s_10X, 2, median)
 s_hpdi_10X <- apply(post_dists_s_10X, 2, HPDI, prob = 0.95)
 
-post_dists_s_1X <- as.data.frame(matrix(nrow = npost, ncol = 10))
-names(post_dists_s_1X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+post_dists_s_1X <- as.data.frame(matrix(nrow = npost, ncol = nreps))
+names(post_dists_s_1X) <- c(paste("rep_", seq(from = 1, to = nreps), sep = ""))
 
 for(i in 1:nreps){
   post_dists_s_1X[,i] <- read.table(paste("1X_bgs/rep_", i, "/params_post_dist.tsv", sep = ""), header = T)$neuralnet_s
@@ -571,7 +571,7 @@ molten_ci_upper <- melt(s_hpdi_upper)
 
 s_medians <- rbind.data.frame(s_median_1X, s_median_10X)
 names(s_medians) <- paste("rep_", 1:nreps, sep = "")
-s_medians$model <- c(1, 10)
+s_medians$model <- c(1, nreps)
 
 molten_medians <- melt(s_medians, id.vars = "model")
 molten_medians$lower <- molten_ci_lower$value
@@ -596,8 +596,8 @@ dotplot_s
 ggsave("dotplot_s.pdf", dotplot_s, device = "pdf", dpi = 500, width = 5, height = 5)
 
 # h
-post_dists_h_10X <- as.data.frame(matrix(nrow = npost, ncol = 10))
-names(post_dists_h_10X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+post_dists_h_10X <- as.data.frame(matrix(nrow = npost, ncol = nreps))
+names(post_dists_h_10X) <- c(paste("rep_", seq(from = 1, to = nreps), sep = ""))
 
 # focal SNP with 10X stronger selection as linked SNPs
 for(i in 1:nreps){
@@ -609,8 +609,8 @@ molten_h_10X <- melt(post_dists_h_10X)
 h_median_10X <- apply(post_dists_h_10X, 2, median)
 h_hpdi_10X <- apply(post_dists_h_10X, 2, HPDI, prob = 0.95)
 
-post_dists_h_1X <- as.data.frame(matrix(nrow = npost, ncol = 10))
-names(post_dists_h_1X) <- c(paste("rep_", seq(from = 1, to = 10), sep = ""))
+post_dists_h_1X <- as.data.frame(matrix(nrow = npost, ncol = nreps))
+names(post_dists_h_1X) <- c(paste("rep_", seq(from = 1, to = nreps), sep = ""))
 
 for(i in 1:nreps){
   post_dists_h_1X[,i] <- read.table(paste("1X_bgs/rep_", i, "/params_post_dist.tsv", sep = ""), header = T)$neuralnet_h
@@ -631,7 +631,7 @@ molten_ci_upper <- melt(h_hpdi_upper)
 
 h_medians <- rbind.data.frame(h_median_1X, h_median_10X)
 names(h_medians) <- paste("rep_", 1:nreps, sep = "")
-h_medians$model <- c(1, 10)
+h_medians$model <- c(1, nreps)
 
 molten_medians <- melt(h_medians, id.vars = "model")
 molten_medians$lower <- molten_ci_lower$value
@@ -658,5 +658,346 @@ ggsave("dotplot_h.pdf", dotplot_h, device = "pdf", dpi = 500, width = 5, height 
 post_dists <- plot_grid(dotplot_s, dotplot_h, ncol = 1, labels = "AUTO", label_size = 20)
 
 cowplot::save_plot("post_dists_tight.pdf", plot = post_dists, device = "pdf", dpi = 500, base_width = 8, base_height = 12)
+
+##################################
+#
+# MLE plots
+# 
+##################################
+
+setwd("~/Data/TIDES/paper_1/MLE/")
+
+start_index <- 1
+nreps <- 10
+sel_models <- c("strong", "moderate", "weak")
+
+# Single SNP
+
+## additive
+
+mle_additive <- as.data.frame(matrix(nrow = 3 * nreps, ncol = 7))
+names(mle_additive) <- c("point_s", "s_std_err", "point_h", "h_std_err", "true_s", "true_h", "rep")
+mle_additive$true_s <- c(rep(-0.1, 10), rep(-0.05, 10), rep(-0.01, 10))
+mle_additive$true_h <- 0.5
+mle_additive$rep <- rep(c(paste("rep_", seq(from = 1, to = nreps), sep = "")), 3)
+mle_additive$model <- c(rep("strong / additive", 10), rep("moderate / additive", 10), rep("weak / additive", 10))
+
+for(i in 1:length(sel_models)) {
+  
+  for(j in 1:nreps) {
+  
+    tbl <- read.table(paste("single_SNP/additive/", sel_models[i], "/rep_", j, "/mle_cleaned.txt", sep = ""), header = F)
+    
+    idx <- j + (i-1) * nreps
+
+    mle_additive[idx, 1] <- tbl[1, 2]
+    mle_additive[idx, 2] <- tbl[1, 3]
+    mle_additive[idx, 3] <- tbl[2, 2]
+    mle_additive[idx, 4] <- tbl[2, 3]
+  }
+}
+
+## recessive
+
+mle_recessive <- as.data.frame(matrix(nrow = 3 * nreps, ncol = 7))
+names(mle_recessive) <- c("point_s", "s_std_err", "point_h", "h_std_err", "true_s", "true_h", "rep")
+mle_recessive$true_s <- c(rep(-0.1, 10), rep(-0.05, 10), rep(-0.01, 10))
+mle_recessive$true_h <- 0
+mle_recessive$rep <- rep(c(paste("rep_", seq(from = 1, to = nreps), sep = "")), 3)
+mle_recessive$model <- c(rep("strong / recessive", 10), rep("moderate / recessive", 10), rep("weak / recessive", 10))
+
+for(i in 1:length(sel_models)) {
+  
+  for(j in 1:nreps) {
+    
+    tbl <- read.table(paste("single_SNP/recessive/", sel_models[i], "/rep_", j, "/mle_cleaned.txt", sep = ""), header = F)
+    
+    idx <- j + (i-1) * nreps
+    
+    mle_recessive[idx, 1] <- tbl[1, 2]
+    mle_recessive[idx, 2] <- tbl[1, 3]
+    mle_recessive[idx, 3] <- tbl[2, 2]
+    mle_recessive[idx, 4] <- tbl[2, 3]
+  }
+}
+
+mle_single_snp <- rbind.data.frame(mle_additive, mle_recessive)
+# for plotting in log scale:
+mle_single_snp$point_s <- abs(mle_single_snp$point_s) 
+mle_single_snp$true_s <- abs(mle_single_snp$true_s) 
+mle_single_snp[mle_single_snp$point_s == 0,]$point_s <- 1e-6
+mle_single_snp[mle_single_snp$point_h == 0,]$point_h <- 1e-6
+
+mle_single_snp$lower_s <- mle_single_snp$point_s - 2 * mle_single_snp$s_std_err
+mle_single_snp$upper_s <- mle_single_snp$point_s + 2 * mle_single_snp$s_std_err
+mle_single_snp$lower_h <- mle_single_snp$point_h - 2 * mle_single_snp$h_std_err
+mle_single_snp$upper_h <- mle_single_snp$point_h + 2 * mle_single_snp$h_std_err
+
+mle_single_snp$model <- as.factor(mle_single_snp$model)
+
+mle_single_snp_molten <- pivot_longer(mle_single_snp, cols = c("point_s", "point_h"), names_to = "parameter")
+mle_single_snp_molten$model <- with(mle_single_snp_molten, reorder(model, true_s, decreasing=T))
+
+dotplot_s <- ggplot(filter(mle_single_snp_molten, parameter == "point_s"), aes(x = model, y = value))
+dotplot_s <- dotplot_s + scale_y_log10(limits = c(1e-7, 0.2), breaks = c(1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)) 
+dotplot_s <- dotplot_s + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = value, group = parameter, ymin = lower_s, ymax = upper_s),
+                                         alpha = 0.5, fatten = 5, size = 0.5) 
+dotplot_s <- dotplot_s + labs(title = NULL, x = "Model", y = "Inferred |s|") + theme_bw()
+dotplot_s <- dotplot_s + geom_segment(aes(x = 0.7, xend = 1.3, y = 1e-1, yend = 1e-1, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 1.7, xend = 2.3, y = 1e-1, yend = 1e-1, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 2.7, xend = 3.3, y = 5e-2, yend = 5e-2, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 3.7, xend = 4.3, y = 5e-2, yend = 5e-2, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 4.7, xend = 5.3, y = 1e-3, yend = 1e-3, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 5.7, xend = 6.3, y = 1e-3, yend = 1e-3, color = "red"))
+dotplot_s <- dotplot_s + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(angle = 45, vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_s
+ggsave("dotplot_s_mle_singleSNP.pdf", dotplot_s, device = "pdf", dpi = 500, width = 7, height = 7)
+
+dotplot_h <- ggplot(filter(mle_single_snp_molten, parameter == "point_h"), aes(x = model, y = value))
+dotplot_h <- dotplot_h + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = value, group = parameter, ymin = lower_h, ymax = upper_h),
+                                         alpha = 0.5, fatten = 5, size = 0.5) 
+dotplot_h <- dotplot_h + scale_y_continuous(breaks = c(0, 0.5, 1)) 
+dotplot_h <- dotplot_h + labs(title = NULL, x = "Model", y = "Inferred h") + theme_bw()
+dotplot_h <- dotplot_h + geom_segment(aes(x = 0.7, xend = 1.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 1.7, xend = 2.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 2.7, xend = 3.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 3.7, xend = 4.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 4.7, xend = 5.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 5.7, xend = 6.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(angle = 45, vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_h
+ggsave("dotplot_h_mle_singleSNP.pdf", dotplot_h, device = "pdf", dpi = 500, width = 7, height = 7)
+
+
+# LD Beta 5/10
+
+## additive
+
+mle_additive <- as.data.frame(matrix(nrow = 3 * nreps, ncol = 7))
+names(mle_additive) <- c("point_s", "s_std_err", "point_h", "h_std_err", "true_s", "true_h", "rep")
+mle_additive$true_s <- c(rep(-0.01, 10), rep(-0.001, 10), rep(-0.0001, 10))
+mle_additive$true_h <- 0.5
+mle_additive$rep <- rep(c(paste("rep_", seq(from = 1, to = nreps), sep = "")), 3)
+mle_additive$model <- c(rep("strong / additive", 10), rep("moderate / additive", 10), rep("weak / additive", 10))
+
+for(i in 1:length(sel_models)) {
+  
+  for(j in 1:nreps) {
+    
+    tbl <- read.table(paste("LD_beta_5_10/additive/", sel_models[i], "/rep_", j, "/mle_cleaned.txt", sep = ""), header = F)
+    
+    idx <- j + (i-1) * nreps
+    
+    mle_additive[idx, 1] <- tbl[1, 2]
+    mle_additive[idx, 2] <- tbl[1, 3]
+    mle_additive[idx, 3] <- tbl[2, 2]
+    mle_additive[idx, 4] <- tbl[2, 3]
+  }
+}
+
+## recessive
+
+mle_recessive <- as.data.frame(matrix(nrow = 3 * nreps, ncol = 7))
+names(mle_recessive) <- c("point_s", "s_std_err", "point_h", "h_std_err", "true_s", "true_h", "rep")
+mle_recessive$true_s <- c(rep(-0.01, 10), rep(-0.001, 10), rep(-0.0001, 10))
+mle_recessive$true_h <- 0
+mle_recessive$rep <- rep(c(paste("rep_", seq(from = 1, to = nreps), sep = "")), 3)
+mle_recessive$model <- c(rep("strong / recessive", 10), rep("moderate / recessive", 10), rep("weak / recessive", 10))
+
+for(i in 1:length(sel_models)) {
+  
+  for(j in 1:nreps) {
+    
+    tbl <- read.table(paste("LD_beta_5_10/recessive/", sel_models[i], "/rep_", j, "/mle_cleaned.txt", sep = ""), header = F)
+    
+    idx <- j + (i-1) * nreps
+    
+    mle_recessive[idx, 1] <- tbl[1, 2]
+    mle_recessive[idx, 2] <- tbl[1, 3]
+    mle_recessive[idx, 3] <- tbl[2, 2]
+    mle_recessive[idx, 4] <- tbl[2, 3]
+  }
+}
+
+mle_LD_beta_5_10 <- rbind.data.frame(mle_additive, mle_recessive)
+# for plotting in log scale:
+mle_LD_beta_5_10$point_s <- abs(mle_LD_beta_5_10$point_s) 
+mle_LD_beta_5_10$true_s <- abs(mle_LD_beta_5_10$true_s) 
+mle_LD_beta_5_10[mle_LD_beta_5_10$point_s == 0,]$point_s <- 1e-6
+mle_LD_beta_5_10[mle_LD_beta_5_10$point_h == 0,]$point_h <- 1e-6
+
+mle_LD_beta_5_10$lower_s <- mle_LD_beta_5_10$point_s - 2 * mle_LD_beta_5_10$s_std_err
+mle_LD_beta_5_10$upper_s <- mle_LD_beta_5_10$point_s + 2 * mle_LD_beta_5_10$s_std_err
+mle_LD_beta_5_10$lower_h <- mle_LD_beta_5_10$point_h - 2 * mle_LD_beta_5_10$h_std_err
+mle_LD_beta_5_10$upper_h <- mle_LD_beta_5_10$point_h + 2 * mle_LD_beta_5_10$h_std_err
+
+mle_LD_beta_5_10$model <- as.factor(mle_LD_beta_5_10$model)
+
+mle_LD_beta_5_10_molten <- pivot_longer(mle_LD_beta_5_10, cols = c("point_s", "point_h"), names_to = "parameter")
+mle_LD_beta_5_10_molten$model <- with(mle_LD_beta_5_10_molten, reorder(model, true_s, decreasing=T))
+
+dotplot_s <- ggplot(filter(mle_LD_beta_5_10_molten, parameter == "point_s"), aes(x = model, y = value))
+dotplot_s <- dotplot_s + scale_y_log10(limits = c(1e-7, 0.2), breaks = c(1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)) 
+dotplot_s <- dotplot_s + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = value, group = parameter, ymin = lower_s, ymax = upper_s),
+                                         alpha = 0.5, fatten = 5, size = 0.5) 
+dotplot_s <- dotplot_s + labs(title = NULL, x = "Model", y = "Inferred |s|") + theme_bw()
+dotplot_s <- dotplot_s + geom_segment(aes(x = 0.7, xend = 1.3, y = 1e-2, yend = 1e-2, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 1.7, xend = 2.3, y = 1e-2, yend = 1e-2, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 2.7, xend = 3.3, y = 1e-3, yend = 1e-3, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 3.7, xend = 4.3, y = 1e-3, yend = 1e-3, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 4.7, xend = 5.3, y = 1e-4, yend = 1e-4, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 5.7, xend = 6.3, y = 1e-4, yend = 1e-4, color = "red"))
+dotplot_s <- dotplot_s + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(angle = 45, vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_s
+ggsave("dotplot_s_mle_LD_beta_5_10.pdf", dotplot_s, device = "pdf", dpi = 500, width = 7, height = 7)
+
+dotplot_h <- ggplot(filter(mle_LD_beta_5_10_molten, parameter == "point_h"), aes(x = model, y = value))
+dotplot_h <- dotplot_h + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = value, group = parameter, ymin = lower_h, ymax = upper_h),
+                                         alpha = 0.5, fatten = 5, size = 0.5) 
+dotplot_h <- dotplot_h + labs(title = NULL, x = "Model", y = "Inferred h") + theme_bw()
+dotplot_h <- dotplot_h + scale_y_continuous(breaks = c(0, 0.5, 1)) 
+dotplot_h <- dotplot_h + geom_segment(aes(x = 0.7, xend = 1.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 1.7, xend = 2.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 2.7, xend = 3.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 3.7, xend = 4.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 4.7, xend = 5.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 5.7, xend = 6.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(angle = 45, vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_h
+ggsave("dotplot_h_mle_LD_beta_5_10.pdf", dotplot_h, device = "pdf", dpi = 500, width = 7, height = 7)
+
+
+# LD Beta 5/100
+
+## additive
+
+mle_additive <- as.data.frame(matrix(nrow = 3 * nreps, ncol = 7))
+names(mle_additive) <- c("point_s", "s_std_err", "point_h", "h_std_err", "true_s", "true_h", "rep")
+mle_additive$true_s <- c(rep(-0.01, 10), rep(-0.001, 10), rep(-0.0001, 10))
+mle_additive$true_h <- 0.5
+mle_additive$rep <- rep(c(paste("rep_", seq(from = 1, to = nreps), sep = "")), 3)
+mle_additive$model <- c(rep("strong / additive", 10), rep("moderate / additive", 10), rep("weak / additive", 10))
+
+for(i in 1:length(sel_models)) {
+  
+  for(j in 1:nreps) {
+    
+    tbl <- read.table(paste("LD_beta_5_100/additive/", sel_models[i], "/rep_", j, "/mle_cleaned.txt", sep = ""), header = F)
+    
+    idx <- j + (i-1) * nreps
+    
+    mle_additive[idx, 1] <- tbl[1, 2]
+    mle_additive[idx, 2] <- tbl[1, 3]
+    mle_additive[idx, 3] <- tbl[2, 2]
+    mle_additive[idx, 4] <- tbl[2, 3]
+  }
+}
+
+## recessive
+
+mle_recessive <- as.data.frame(matrix(nrow = 3 * nreps, ncol = 7))
+names(mle_recessive) <- c("point_s", "s_std_err", "point_h", "h_std_err", "true_s", "true_h", "rep")
+mle_recessive$true_s <- c(rep(-0.01, 10), rep(-0.001, 10), rep(-0.0001, 10))
+mle_recessive$true_h <- 0
+mle_recessive$rep <- rep(c(paste("rep_", seq(from = 1, to = nreps), sep = "")), 3)
+mle_recessive$model <- c(rep("strong / recessive", 10), rep("moderate / recessive", 10), rep("weak / recessive", 10))
+
+for(i in 1:length(sel_models)) {
+  
+  for(j in 1:nreps) {
+    
+    tbl <- read.table(paste("LD_beta_5_100/recessive/", sel_models[i], "/rep_", j, "/mle_cleaned.txt", sep = ""), header = F)
+    
+    idx <- j + (i-1) * nreps
+    
+    mle_recessive[idx, 1] <- tbl[1, 2]
+    mle_recessive[idx, 2] <- tbl[1, 3]
+    mle_recessive[idx, 3] <- tbl[2, 2]
+    mle_recessive[idx, 4] <- tbl[2, 3]
+  }
+}
+
+mle_LD_beta_5_100 <- rbind.data.frame(mle_additive, mle_recessive)
+# for plotting in log scale:
+mle_LD_beta_5_100$point_s <- abs(mle_LD_beta_5_100$point_s) 
+mle_LD_beta_5_100$true_s <- abs(mle_LD_beta_5_100$true_s) 
+mle_LD_beta_5_100[mle_LD_beta_5_100$point_s == 0,]$point_s <- 1e-6
+mle_LD_beta_5_100[mle_LD_beta_5_100$point_h == 0,]$point_h <- 1e-6
+
+mle_LD_beta_5_100$lower_s <- mle_LD_beta_5_100$point_s - 2 * mle_LD_beta_5_100$s_std_err
+mle_LD_beta_5_100$upper_s <- mle_LD_beta_5_100$point_s + 2 * mle_LD_beta_5_100$s_std_err
+mle_LD_beta_5_100$lower_h <- mle_LD_beta_5_100$point_h - 2 * mle_LD_beta_5_100$h_std_err
+mle_LD_beta_5_100$upper_h <- mle_LD_beta_5_100$point_h + 2 * mle_LD_beta_5_100$h_std_err
+
+mle_LD_beta_5_100$model <- as.factor(mle_LD_beta_5_100$model)
+
+mle_LD_beta_5_100_molten <- pivot_longer(mle_LD_beta_5_100, cols = c("point_s", "point_h"), names_to = "parameter")
+mle_LD_beta_5_100_molten$model <- with(mle_LD_beta_5_100_molten, reorder(model, true_s, decreasing=T))
+
+dotplot_s <- ggplot(filter(mle_LD_beta_5_100_molten, parameter == "point_s"), aes(x = model, y = value))
+dotplot_s <- dotplot_s + scale_y_log10(limits = c(1e-7, 0.2), breaks = c(1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)) 
+dotplot_s <- dotplot_s + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = value, group = parameter, ymin = lower_s, ymax = upper_s),
+                                         alpha = 0.5, fatten = 5, size = 0.5) 
+dotplot_s <- dotplot_s + labs(title = NULL, x = "Model", y = "Inferred |s|") + theme_bw()
+dotplot_s <- dotplot_s + geom_segment(aes(x = 0.7, xend = 1.3, y = 1e-2, yend = 1e-2, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 1.7, xend = 2.3, y = 1e-2, yend = 1e-2, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 2.7, xend = 3.3, y = 1e-3, yend = 1e-3, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 3.7, xend = 4.3, y = 1e-3, yend = 1e-3, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 4.7, xend = 5.3, y = 1e-4, yend = 1e-4, color = "red"))
+dotplot_s <- dotplot_s + geom_segment(aes(x = 5.7, xend = 6.3, y = 1e-4, yend = 1e-4, color = "red"))
+dotplot_s <- dotplot_s + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(angle = 45, vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_s
+ggsave("dotplot_s_mle_LD_beta_5_100.pdf", dotplot_s, device = "pdf", dpi = 500, width = 7, height = 7)
+
+dotplot_h <- ggplot(filter(mle_LD_beta_5_100_molten, parameter == "point_h"), aes(x = model, y = value))
+dotplot_h <- dotplot_h + geom_pointrange(position = position_jitter(0.3),
+                                         aes(y = value, group = parameter, ymin = lower_h, ymax = upper_h),
+                                         alpha = 0.5, fatten = 5, size = 0.5) 
+dotplot_h <- dotplot_h + scale_y_continuous(breaks = c(0, 0.5, 1)) 
+dotplot_h <- dotplot_h + labs(title = NULL, x = "Model", y = "Inferred h") + theme_bw()
+dotplot_h <- dotplot_h + geom_segment(aes(x = 0.7, xend = 1.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 1.7, xend = 2.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 2.7, xend = 3.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 3.7, xend = 4.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 4.7, xend = 5.3, y = 0.5, yend = 0.5, color = "red"))
+dotplot_h <- dotplot_h + geom_segment(aes(x = 5.7, xend = 6.3, y = 0, yend = 0, color = "red"))
+dotplot_h <- dotplot_h + theme(legend.position = "none",
+                               legend.title = element_blank(),
+                               axis.title.x = element_text(size = 18),
+                               axis.title.y = element_text(size = 16),
+                               axis.text.x = element_text(angle = 45, vjust = 0.6, size = 10),
+                               axis.text.y = element_text(size = 10)) 
+dotplot_h
+ggsave("dotplot_h_mle_LD_beta_5_100.pdf", dotplot_h, device = "pdf", dpi = 500, width = 7, height = 7)
 
 
