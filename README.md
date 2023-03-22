@@ -9,4 +9,4 @@ The 'doc/' directory contains a (hopefully useful) README file with practical co
 The 'tools/r_scripts' directory includes R scripts for analyzing and plotting results, as well as for reproducing the simulation results from the original article.
 This project uses C++ code modified after the Bio++ Core libraries (https://github.com/BioPP/bpp-core)
 
-To cite TIDES, use: https://www.biorxiv.org/content/10.1101/2021.10.08.463705v1
+To cite TIDES, use doi: 10.1101/gr.276386.121
